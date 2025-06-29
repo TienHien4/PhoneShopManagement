@@ -14,6 +14,4 @@ public interface UserService {
     UserResponse updateCustomer(long id, UserUpdateRequest request);
     UserResponse getCustomerById(long id);
     List<UserResponse> getCustomers();
-    LoginResponse login(LoginRequest request);
-    void logout(LogoutRequest request);
 }

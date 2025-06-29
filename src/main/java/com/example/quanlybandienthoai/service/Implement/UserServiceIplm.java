@@ -6,17 +6,23 @@ import com.example.quanlybandienthoai.dto.Request.UserRequest;
 import com.example.quanlybandienthoai.dto.Request.UserUpdateRequest;
 import com.example.quanlybandienthoai.dto.Response.LoginResponse;
 import com.example.quanlybandienthoai.dto.Response.UserResponse;
+import com.example.quanlybandienthoai.entity.Role;
 import com.example.quanlybandienthoai.entity.User;
 import com.example.quanlybandienthoai.enums.DefinitionCode;
 import com.example.quanlybandienthoai.exception.AppException;
+import com.example.quanlybandienthoai.repository.RoleRepository;
 import com.example.quanlybandienthoai.repository.UserRepository;
 import com.example.quanlybandienthoai.service.UserService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * @author: Nguyễn Tiến Hiền
@@ -28,6 +34,8 @@ public class UserServiceIplm implements UserService {
 
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private RoleRepository roleRepository;
 
     private static final Logger logger = LogManager.getLogger(UserServiceIplm.class);
 
@@ -49,27 +57,32 @@ public class UserServiceIplm implements UserService {
                     "Email already exists: " + request.getEmail()
             );
         }
+        BCryptPasswordEncoder bCryptPasswordEncoder = new BCryptPasswordEncoder();
 
         // Tạo mới user và lưu vào database
         User user = new User();
-        user.setFull_name(request.getFull_name());
+        user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
-        user.setPassword(request.getPassword());
+        user.setPassword(bCryptPasswordEncoder.encode(request.getPassword()));
         user.setPhone(request.getPhone());
         user.setAddress(request.getAddress());
-
+        Role role = roleRepository.findByName("USER");
+        Set<Role> roles = new HashSet<>();
+        roles.add(role);
+        user.setRoles(roles);
         userRepository.save(user);
         logger.info("Tạo khách hàng thành công, ID: {}", user.getUserId());
 
         // Trả về response
         return new UserResponse(
                 user.getUserId(),
-                user.getFull_name(),
+                user.getUsername(),
                 user.getEmail(),
                 user.getPassword(),
                 user.getPhone(),
                 user.getAddress(),
-                user.getRegistrated_date()
+                user.getRegistrated_date(),
+                user.getRoles().stream().map(s -> s.getName()).collect(Collectors.toSet())
         );
     }
 
@@ -88,7 +101,7 @@ public class UserServiceIplm implements UserService {
                     );
                 });
 
-        user.setFull_name(request.getFull_name());
+        user.setUsername(request.getUsername());
         user.setPhone(request.getPhone());
         user.setAddress(request.getAddress());
         userRepository.save(user);
@@ -96,12 +109,13 @@ public class UserServiceIplm implements UserService {
 
         return new UserResponse(
                 user.getUserId(),
-                user.getFull_name(),
+                user.getUsername(),
                 user.getEmail(),
                 user.getPassword(),
                 user.getPhone(),
                 user.getAddress(),
-                user.getRegistrated_date()
+                user.getRegistrated_date(),
+                user.getRoles().stream().map(s -> s.getName()).collect(Collectors.toSet())
         );
     }
 
@@ -119,12 +133,13 @@ public class UserServiceIplm implements UserService {
 
         return new UserResponse(
                 user.getUserId(),
-                user.getFull_name(),
+                user.getUsername(),
                 user.getEmail(),
                 user.getPassword(),
                 user.getPhone(),
                 user.getAddress(),
-                user.getRegistrated_date()
+                user.getRegistrated_date(),
+                user.getRoles().stream().map(s -> s.getName()).collect(Collectors.toSet())
         );
     }
 
@@ -139,51 +154,14 @@ public class UserServiceIplm implements UserService {
         return listUsers.stream()
                 .map(user -> new UserResponse(
                         user.getUserId(),
-                        user.getFull_name(),
+                        user.getUsername(),
                         user.getEmail(),
                         user.getPassword(),
                         user.getPhone(),
                         user.getAddress(),
-                        user.getRegistrated_date()
+                        user.getRegistrated_date(),
+                        user.getRoles().stream().map(s -> s.getName()).collect(Collectors.toSet())
                 )).toList();
-    }
 
-    /**
-     * Đăng nhập người dùng.
-     */
-    @Override
-    public LoginResponse login(LoginRequest request) {
-        if (!userRepository.existsByEmail(request.getEmail())) {
-            throw new AppException(
-                    DefinitionCode.NOT_FOUND,
-                    "Email chưa được đăng ký",
-                    "Email not found"
-            );
-        }
-
-        User user = userRepository.findByEmail(request.getEmail());
-        if (!user.getPassword().equals(request.getPassword())) {
-            throw new AppException(
-                    DefinitionCode.NOT_FOUND,
-                    "Mật khẩu sai",
-                    "Password is invalid"
-            );
-        }
-
-        return new LoginResponse(user.getUserId());
-    }
-
-    /**
-     * Đăng xuất người dùng.
-     */
-    @Override
-    public void logout(LogoutRequest request) {
-        User user = userRepository.findById(request.getUser_id())
-                .orElseThrow(() -> new AppException(
-                        DefinitionCode.NOT_FOUND,
-                        "Không tìm thấy người dùng",
-                        "User not found"
-                ));
-        logger.info("Người dùng với id {} đã đăng xuất", request.getUser_id());
     }
 }

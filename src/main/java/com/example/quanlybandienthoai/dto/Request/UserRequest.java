@@ -11,8 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserRequest {
-    @NotBlank(message = "Họ tên không được để trống")
-    private String full_name;
+    private String username;
     @NotBlank(message = "Email không được để trống")
     @Email(message = "Email cần đúng định dạng")
     private String email;

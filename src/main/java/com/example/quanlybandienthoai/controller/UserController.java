@@ -11,6 +11,7 @@ import com.example.quanlybandienthoai.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,6 +33,7 @@ public class UserController {
      * @return ResponseEntity chứa danh sách khách hàng và thông báo
      */
     @GetMapping("")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllCustomer() {
         var result = userService.getCustomers();
         var message = new ApiMessage(
@@ -77,6 +79,7 @@ public class UserController {
      * @return ResponseEntity chứa thông tin người dùng
      */
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> findUserById(@PathVariable int id) {
         var result = userService.getCustomerById(id);
         var message = new ApiMessage(
