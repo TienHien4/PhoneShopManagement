@@ -5,6 +5,7 @@ import com.example.quanlybandienthoai.entity.CartItem;
 import com.example.quanlybandienthoai.repository.CartItemRepository;
 import com.example.quanlybandienthoai.service.CartItemService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -21,20 +22,19 @@ public class CartItemServiceIplm implements CartItemService {
 
     /**
      * Lấy danh sách tất cả các mục trong giỏ hàng
+     * 
      * @return danh sách các CartItemResponse để hiển thị thông tin đã định dạng
      */
     @Override
+    @Cacheable(value = "cartItemList")
     public List<CartItemResponse> getAllOrders() {
         List<CartItem> listOrders = cartItemRepository.findAll();
 
-        var response = listOrders.stream().map(cartItem ->
-                new CartItemResponse(
-                        cartItem.getOrder_id(),
-                        cartItem.getTotal_amount(),
-                        cartItem.getTotal_price(),
-                        cartItem.getProduct()
-                )
-        ).toList();
+        var response = listOrders.stream().map(cartItem -> new CartItemResponse(
+                cartItem.getOrder_id(),
+                cartItem.getTotal_amount(),
+                cartItem.getTotal_price(),
+                cartItem.getProduct())).toList();
 
         return response;
     }

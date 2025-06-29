@@ -1,4 +1,3 @@
-
 package com.example.quanlybandienthoai.controller;
 
 import com.example.quanlybandienthoai.dto.ApiMessage;
@@ -11,11 +10,14 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+
 /**
  * Controller xử lý các API liên quan đến sản phẩm
+ * 
  * @author Nguyễn Tiến Hiền
  * @since 22/06/2025
  */
@@ -28,10 +30,11 @@ public class ProductController {
 
     /**
      * API tạo mới sản phẩm
+     * 
      * @param request Thông tin sản phẩm cần tạo
      * @return ProductResponse chứa thông tin sản phẩm vừa tạo
      */
-    @PostMapping("")
+    @PostMapping
     public ResponseEntity<ApiResponse<ProductResponse>> createProduct(@RequestBody @Valid ProductRequest request) {
         var result = productService.createProduct(request);
         ApiMessage message = new ApiMessage("Tạo sản phẩm thành công",
@@ -41,6 +44,7 @@ public class ProductController {
 
     /**
      * API cập nhật thông tin sản phẩm
+     * 
      * @param id      Mã sản phẩm cần cập nhật
      * @param request Thông tin cập nhật
      * @return ProductResponse chứa thông tin mới
@@ -57,6 +61,7 @@ public class ProductController {
 
     /**
      * API xóa sản phẩm theo ID
+     * 
      * @param id Mã sản phẩm cần xóa
      * @return Thông báo xóa thành công
      */
@@ -70,6 +75,7 @@ public class ProductController {
 
     /**
      * API tìm sản phẩm theo ID
+     * 
      * @param id Mã sản phẩm
      * @return Thông tin sản phẩm
      */
@@ -83,6 +89,7 @@ public class ProductController {
 
     /**
      * API tìm kiếm sản phẩm theo từ khóa (tên sản phẩm)
+     * 
      * @param keyword Từ khóa tìm kiếm
      * @return Danh sách sản phẩm phù hợp
      */
@@ -96,6 +103,7 @@ public class ProductController {
 
     /**
      * API phân trang danh sách sản phẩm
+     * 
      * @param pageNo   Trang số (bắt đầu từ 1)
      * @param pageSize Số lượng sản phẩm mỗi trang (default = 8)
      * @return Page<ProductResponse> chứa thông tin phân trang
@@ -109,4 +117,17 @@ public class ProductController {
                 "Get products successfully", DefinitionCode.SUCCESS.getCode());
         return ResponseEntity.ok().body(new ApiResponse<>(message, result));
     }
+
+    /**
+     * API test lấy sản phẩm theo ID không dùng Redis (benchmark)
+     */
+    @GetMapping("/nocache/{id}")
+    public ResponseEntity<ApiResponse<ProductResponse>> getProductByIdNoCache(@PathVariable int id) {
+        var result = ((com.example.quanlybandienthoai.service.Implement.ProductServiceIplm) productService)
+                .getProductByIdNoCache(id);
+        var message = new ApiMessage("Tìm sản phẩm theo mã (no cache) thành công",
+                "Find product by ID (no cache) successfully", DefinitionCode.SUCCESS.getCode());
+        return ResponseEntity.ok().body(new ApiResponse<>(message, result));
+    }
+
 }

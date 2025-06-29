@@ -32,7 +32,7 @@ public class UserController {
      * API lấy danh sách tất cả khách hàng
      * @return ResponseEntity chứa danh sách khách hàng và thông báo
      */
-    @GetMapping("")
+    @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllCustomer() {
         var result = userService.getCustomers();
@@ -79,7 +79,6 @@ public class UserController {
      * @return ResponseEntity chứa thông tin người dùng
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> findUserById(@PathVariable int id) {
         var result = userService.getCustomerById(id);
         var message = new ApiMessage(

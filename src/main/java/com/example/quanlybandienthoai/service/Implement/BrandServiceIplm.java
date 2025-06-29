@@ -10,6 +10,8 @@ import com.example.quanlybandienthoai.service.BrandService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -31,10 +33,12 @@ public class BrandServiceIplm implements BrandService {
 
     /**
      * Tạo một thương hiệu mới
+     * 
      * @param request dữ liệu thương hiệu từ client
      * @return đối tượng BrandResponse chứa thông tin thương hiệu vừa tạo
      */
     @Override
+    @CacheEvict(value = { "brand", "brandList" }, allEntries = true)
     public BrandResponse createBrand(BrandRequest request) {
         logger.info("Bắt đầu tạo brand với tên: {}", request.getBrand_name());
 
@@ -44,8 +48,7 @@ public class BrandServiceIplm implements BrandService {
             throw new AppException(
                     DefinitionCode.EXISTS,
                     "Tên thương hiệu đã tồn tại",
-                    "Brand already exists: " + request.getBrand_name()
-            );
+                    "Brand already exists: " + request.getBrand_name());
         }
 
         // Tạo đối tượng Brand mới
@@ -62,11 +65,13 @@ public class BrandServiceIplm implements BrandService {
 
     /**
      * Cập nhật thông tin thương hiệu theo ID
-     * @param id ID thương hiệu cần cập nhật
+     * 
+     * @param id      ID thương hiệu cần cập nhật
      * @param request dữ liệu mới từ client
      * @return BrandResponse chứa thông tin đã cập nhật
      */
     @Override
+    @CacheEvict(value = { "brand", "brandList" }, allEntries = true)
     public BrandResponse updateBrand(long id, BrandRequest request) {
         logger.info("Bắt đầu cập nhật brand, ID: {}", id);
 
@@ -77,8 +82,7 @@ public class BrandServiceIplm implements BrandService {
                     return new AppException(
                             DefinitionCode.NOT_FOUND,
                             "Không tìm thấy thương hiệu",
-                            "Brand not found: ID=" + id
-                    );
+                            "Brand not found: ID=" + id);
                 });
 
         // Cập nhật thông tin
@@ -94,9 +98,11 @@ public class BrandServiceIplm implements BrandService {
 
     /**
      * Xoá thương hiệu theo ID
+     * 
      * @param id ID thương hiệu cần xoá
      */
     @Override
+    @CacheEvict(value = { "brand", "brandList" }, allEntries = true)
     public void deleteBrand(long id) {
         logger.info("Yêu cầu xóa brand với ID: {}", id);
 
@@ -106,8 +112,7 @@ public class BrandServiceIplm implements BrandService {
             throw new AppException(
                     DefinitionCode.NOT_FOUND,
                     "Không tìm thấy thương hiệu để xoá",
-                    "Brand not found: ID=" + id
-            );
+                    "Brand not found: ID=" + id);
         }
 
         // Thực hiện xoá
@@ -117,9 +122,11 @@ public class BrandServiceIplm implements BrandService {
 
     /**
      * Lấy danh sách tất cả thương hiệu
+     * 
      * @return danh sách các BrandResponse
      */
     @Override
+    @Cacheable(value = "brandList")
     public List<BrandResponse> getBrands() {
         logger.info("Lấy danh sách tất cả thương hiệu");
 
@@ -131,6 +138,7 @@ public class BrandServiceIplm implements BrandService {
 
     /**
      * Chuyển đối tượng Brand thành DTO BrandResponse
+     * 
      * @param brand đối tượng Entity từ DB
      * @return BrandResponse
      */
@@ -138,7 +146,6 @@ public class BrandServiceIplm implements BrandService {
         return new BrandResponse(
                 brand.getBrand_id(),
                 brand.getBrandName(),
-                brand.getCountry()
-        );
+                brand.getCountry());
     }
 }

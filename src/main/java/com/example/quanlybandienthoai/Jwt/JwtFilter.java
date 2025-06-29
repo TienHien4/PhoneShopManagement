@@ -22,7 +22,8 @@ import java.io.IOException;
 public class JwtFilter extends OncePerRequestFilter {
     @Autowired
     private JwtUtil jwtUtil;
-    @Autowired private CustomUserDetailsService userDetailsService;
+    @Autowired
+    private CustomUserDetailsService userDetailsService;
     @Autowired
     private InvalidatedTokenRepository invalidatedTokenRepository;
 
@@ -43,13 +44,15 @@ public class JwtFilter extends OncePerRequestFilter {
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
             JWTClaimsSet claimsSet = jwtUtil.getClaimsFromToken(token);
             String jwtId = claimsSet.getJWTID();
-            if (invalidatedTokenRepository.existsByUUID(jwtId)) {
+            boolean isInvalidated = invalidatedTokenRepository.existsByUUID(jwtId);
+            if (isInvalidated) {
                 throw new AppException(
                         DefinitionCode.UNAUTHORIZED,
                         "Token vô hiệu",
                         "Token has been invalidated (user logged out)");
             }
-            if (jwtUtil.validateToken(token, userDetails)) {
+            boolean isValid = jwtUtil.validateToken(token, userDetails);
+            if (isValid) {
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
                 SecurityContextHolder.getContext().setAuthentication(authToken);
@@ -58,4 +61,3 @@ public class JwtFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 }
-

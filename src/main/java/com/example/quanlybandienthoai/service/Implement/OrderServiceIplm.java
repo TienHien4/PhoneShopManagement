@@ -10,6 +10,8 @@ import com.example.quanlybandienthoai.exception.AppException;
 import com.example.quanlybandienthoai.repository.*;
 import com.example.quanlybandienthoai.service.OrderService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +22,7 @@ import java.util.List;
 /**
  * Triển khai các chức năng xử lý đơn hàng.
  * Bao gồm đặt hàng mới, lấy danh sách đơn hàng và xóa đơn hàng.
+ * 
  * @author Nguyễn Tiến Hiền
  * @since 25/06/2025
  */
@@ -45,19 +48,20 @@ public class OrderServiceIplm implements OrderService {
      * Xử lý đặt đơn hàng mới từ người dùng.
      * Kiểm tra hợp lệ người dùng, sản phẩm, tính tổng giá và số lượng,
      * tạo mới đơn hàng và xóa giỏ hàng sau khi đặt.
+     * 
      * @param request Dữ liệu đơn hàng từ client
      * @return Thông tin đơn hàng đã tạo
      */
     @Override
     @Transactional
+    @CacheEvict(value = { "orderList" }, allEntries = true)
     public OrderResponse placeOrder(OrderRequest request) {
         // Lấy thông tin người dùng
         User user = userRepository.findById(request.getUserId())
                 .orElseThrow(() -> new AppException(
                         DefinitionCode.NOT_FOUND,
                         "Không tìm thấy sản phẩm",
-                        "User not found with id: " + request.getUserId()
-                ));
+                        "User not found with id: " + request.getUserId()));
 
         // Tạo mới đơn hàng
         Order order = new Order();
@@ -74,8 +78,7 @@ public class OrderServiceIplm implements OrderService {
                     .orElseThrow(() -> new AppException(
                             DefinitionCode.NOT_FOUND,
                             "Không tìm thấy sản phẩm",
-                            "Product not found with id: " + itemReq.getProduct_id()
-                    ));
+                            "Product not found with id: " + itemReq.getProduct_id()));
             OrderItem orderItem = new OrderItem();
             orderItem.setProduct(product);
             orderItem.setQuantity(itemReq.getQuantity());
@@ -133,6 +136,7 @@ public class OrderServiceIplm implements OrderService {
      * @return Danh sách đơn hàng (OrderResponse)
      */
     @Override
+    @Cacheable(value = "orderList")
     public List<OrderResponse> getAllOrders() {
         List<Order> orders = orderRepository.findAll();
         return orders.stream().map(order -> {
@@ -164,13 +168,13 @@ public class OrderServiceIplm implements OrderService {
      * @throws AppException nếu không tìm thấy đơn hàng
      */
     @Override
+    @CacheEvict(value = { "orderList" }, allEntries = true)
     public void deleteOrder(Long orderId) {
         if (!orderRepository.existsById(orderId)) {
             throw new AppException(
                     DefinitionCode.NOT_FOUND,
                     "Không tìm thấy đơn hàng để xóa",
-                    "Order not found"
-            );
+                    "Order not found");
         }
         orderRepository.deleteById(orderId);
     }

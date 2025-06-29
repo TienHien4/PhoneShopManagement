@@ -1,4 +1,3 @@
-
 package com.example.quanlybandienthoai.service.Implement;
 
 import com.example.quanlybandienthoai.dto.Request.ShoppingCartRequest;
@@ -17,10 +16,13 @@ import com.example.quanlybandienthoai.service.ShoppingCartService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+
 /**
  * Service implementation xử lý các thao tác với giỏ hàng của người dùng
  *
@@ -44,6 +46,7 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
      * Thêm sản phẩm vào giỏ hàng của người dùng
      */
     @Override
+    @CacheEvict(value = "cart", key = "#userId")
     public void addItem(ShoppingCartRequest request, long userId, long productId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
@@ -51,8 +54,7 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
                     return new AppException(
                             DefinitionCode.NOT_FOUND,
                             "Không tìm thấy khách hàng",
-                            "No customer with id: " + userId
-                    );
+                            "No customer with id: " + userId);
                 });
 
         Product p = productRepository.findById(productId)
@@ -61,8 +63,7 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
                     return new AppException(
                             DefinitionCode.NOT_FOUND,
                             "Không tìm thấy sản phẩm",
-                            "Product not found with id: " + productId
-                    );
+                            "Product not found with id: " + productId);
                 });
 
         ShoppingCart shoppingCart = user.getShopping_cart();
@@ -99,6 +100,7 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
      * Xóa sản phẩm ra khỏi giỏ hàng của người dùng
      */
     @Override
+    @CacheEvict(value = "cart", key = "#userId")
     public void deleteItem(long userId, long productId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
@@ -106,16 +108,14 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
                     return new AppException(
                             DefinitionCode.NOT_FOUND,
                             "Không tìm thấy người dùng",
-                            "User not found with id: " + userId
-                    );
+                            "User not found with id: " + userId);
                 });
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new AppException(
                         DefinitionCode.NOT_FOUND,
                         "Không tìm thấy sản phẩm",
-                        "Product not found with id: " + productId
-                ));
+                        "Product not found with id: " + productId));
 
         ShoppingCart shoppingCart = user.getShopping_cart();
         var listOrders = shoppingCart.getListCartItems();
@@ -132,6 +132,7 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
      * Lấy tất cả sản phẩm có trong giỏ hàng
      */
     @Override
+    @Cacheable(value = "cart", key = "#userId")
     public List<CartItemResponse> getAllItem(long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
@@ -139,8 +140,7 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
                     return new AppException(
                             DefinitionCode.NOT_FOUND,
                             "Không tìm thấy người dùng",
-                            "User not found with id: " + userId
-                    );
+                            "User not found with id: " + userId);
                 });
 
         ShoppingCart shoppingCart = user.getShopping_cart();
@@ -150,9 +150,8 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
                         cartItem.getOrder_id(),
                         cartItem.getTotal_amount(),
                         cartItem.getTotal_price(),
-                        cartItem.getProduct()
-                )
-        ).toList();
+                        cartItem.getProduct()))
+                .toList();
 
         return response;
     }
@@ -161,20 +160,19 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
      * Giảm số lượng sản phẩm trong giỏ hàng
      */
     @Override
+    @CacheEvict(value = "cart", key = "#userId")
     public void reduceItem(long userId, long productId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(
                         DefinitionCode.NOT_FOUND,
                         "Không tìm thấy người dùng",
-                        "User not found with id: " + userId
-                ));
+                        "User not found with id: " + userId));
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new AppException(
                         DefinitionCode.NOT_FOUND,
                         "Không tìm thấy sản phẩm",
-                        "Product not found with id: " + productId
-                ));
+                        "Product not found with id: " + productId));
 
         ShoppingCart shoppingCart = user.getShopping_cart();
         var listOrders = shoppingCart.getListCartItems();
