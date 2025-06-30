@@ -7,13 +7,15 @@ import com.example.quanlybandienthoai.enums.DefinitionCode;
 import com.example.quanlybandienthoai.exception.AppException;
 import com.example.quanlybandienthoai.repository.BrandRepository;
 import com.example.quanlybandienthoai.service.BrandService;
+import com.example.quanlybandienthoai.service.RedisService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,6 +31,9 @@ public class BrandServiceIplm implements BrandService {
     @Autowired
     private BrandRepository brandRepository;
 
+    @Autowired
+    private RedisService redisService;
+
     private static final Logger logger = LogManager.getLogger(BrandServiceIplm.class);
 
     /**
@@ -38,7 +43,6 @@ public class BrandServiceIplm implements BrandService {
      * @return đối tượng BrandResponse chứa thông tin thương hiệu vừa tạo
      */
     @Override
-    @CacheEvict(value = { "brand", "brandList" }, allEntries = true)
     public BrandResponse createBrand(BrandRequest request) {
         logger.info("Bắt đầu tạo brand với tên: {}", request.getBrand_name());
 
@@ -60,8 +64,15 @@ public class BrandServiceIplm implements BrandService {
         brand = brandRepository.save(brand);
         logger.info("Tạo brand thành công, ID: {}", brand.getBrand_id());
 
-        return toResponse(brand);
-    }
+        // Xóa cache danh sách brand và brand theo id
+        redisService.delete("brandList");
+        redisService.delete("brand:" + brand.getBrand_id());
+
+        return new BrandResponse(
+                brand.getBrand_id(),
+                brand.getBrandName(),
+                brand.getCountry());
+    };
 
     /**
      * Cập nhật thông tin thương hiệu theo ID
@@ -71,7 +82,6 @@ public class BrandServiceIplm implements BrandService {
      * @return BrandResponse chứa thông tin đã cập nhật
      */
     @Override
-    @CacheEvict(value = { "brand", "brandList" }, allEntries = true)
     public BrandResponse updateBrand(long id, BrandRequest request) {
         logger.info("Bắt đầu cập nhật brand, ID: {}", id);
 
@@ -93,8 +103,15 @@ public class BrandServiceIplm implements BrandService {
         brand = brandRepository.save(brand);
         logger.info("Cập nhật brand thành công, ID: {}", id);
 
-        return toResponse(brand);
-    }
+        // Xóa cache danh sách brand và brand theo id
+        redisService.delete("brandList");
+        redisService.delete("brand:" + id);
+
+        return new BrandResponse(
+                brand.getBrand_id(),
+                brand.getBrandName(),
+                brand.getCountry());
+    };
 
     /**
      * Xoá thương hiệu theo ID
@@ -102,7 +119,6 @@ public class BrandServiceIplm implements BrandService {
      * @param id ID thương hiệu cần xoá
      */
     @Override
-    @CacheEvict(value = { "brand", "brandList" }, allEntries = true)
     public void deleteBrand(long id) {
         logger.info("Yêu cầu xóa brand với ID: {}", id);
 
@@ -118,6 +134,10 @@ public class BrandServiceIplm implements BrandService {
         // Thực hiện xoá
         brandRepository.deleteById(id);
         logger.info("Xoá brand thành công, ID: {}", id);
+
+        // Xóa cache danh sách brand và brand theo id
+        redisService.delete("brandList");
+        redisService.delete("brand:" + id);
     }
 
     /**
@@ -126,26 +146,31 @@ public class BrandServiceIplm implements BrandService {
      * @return danh sách các BrandResponse
      */
     @Override
-    @Cacheable(value = "brandList")
     public List<BrandResponse> getBrands() {
-        logger.info("Lấy danh sách tất cả thương hiệu");
+        String cacheKey = "brandList";
+        Object cached = redisService.getValue(cacheKey);
+        if (cached != null) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                List<BrandResponse> cachedList = mapper.convertValue(cached, new TypeReference<List<BrandResponse>>() {});
+                logger.info("Trả về danh sách brand từ cache");
+                return cachedList;
+            } catch (Exception e) {
+                logger.warn("Lỗi khi ép kiểu dữ liệu cache brandList: {}", e.getMessage());
+            }
+        }
 
         List<Brand> brands = brandRepository.findAll();
-        return brands.stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Chuyển đối tượng Brand thành DTO BrandResponse
-     * 
-     * @param brand đối tượng Entity từ DB
-     * @return BrandResponse
-     */
-    private BrandResponse toResponse(Brand brand) {
-        return new BrandResponse(
-                brand.getBrand_id(),
-                brand.getBrandName(),
-                brand.getCountry());
+        List<BrandResponse> result = brands.stream()
+                .map(brand -> {
+                    BrandResponse brandResponse = new BrandResponse(
+                            brand.getBrand_id(),
+                            brand.getBrandName(),
+                            brand.getCountry()
+                    );
+                    return  brandResponse;
+                }).collect(Collectors.toList());
+        redisService.setValue(cacheKey, result);
+        return result;
     }
 }

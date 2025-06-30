@@ -12,12 +12,11 @@ import com.example.quanlybandienthoai.repository.CartItemRepository;
 import com.example.quanlybandienthoai.repository.ProductRepository;
 import com.example.quanlybandienthoai.repository.ShoppingCartRepository;
 import com.example.quanlybandienthoai.repository.UserRepository;
+import com.example.quanlybandienthoai.service.RedisService;
 import com.example.quanlybandienthoai.service.ShoppingCartService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -39,6 +38,8 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
     private UserRepository userRepository;
     @Autowired
     private CartItemRepository cartItemRepository;
+    @Autowired
+    private RedisService redisService;
 
     private static final Logger logger = LogManager.getLogger(ShoppingCartServiceIplm.class);
 
@@ -46,7 +47,6 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
      * Thêm sản phẩm vào giỏ hàng của người dùng
      */
     @Override
-    @CacheEvict(value = "cart", key = "#userId")
     public void addItem(ShoppingCartRequest request, long userId, long productId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
@@ -94,13 +94,14 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
         shoppingCart.setTotal_price(totalPrice(listOrders));
         shoppingCart.setTotal_product(totalAmount(listOrders));
         shoppingCartRepository.save(shoppingCart);
+        // Xóa cache giỏ hàng user này
+        redisService.delete("cart:" + userId);
     }
 
     /**
      * Xóa sản phẩm ra khỏi giỏ hàng của người dùng
      */
     @Override
-    @CacheEvict(value = "cart", key = "#userId")
     public void deleteItem(long userId, long productId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
@@ -126,14 +127,22 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
         shoppingCart.setTotal_product(totalAmount(listOrders));
         shoppingCart.setTotal_price(totalPrice(listOrders));
         shoppingCartRepository.save(shoppingCart);
+        // Xóa cache giỏ hàng user này
+        redisService.delete("cart:" + userId);
     }
 
     /**
      * Lấy tất cả sản phẩm có trong giỏ hàng
      */
     @Override
-    @Cacheable(value = "cart", key = "#userId")
     public List<CartItemResponse> getAllItem(long userId) {
+        // Kiểm tra cache trước
+        String key = "cart:" + userId;
+        Object cached = redisService.getValue(key);
+        if (cached != null) {
+            logger.info("Get cart from Redis cache for userId: {}", userId);
+            return (List<CartItemResponse>) cached;
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> {
                     logger.warn("Không tìm thấy người dùng với mã: {}", userId);
@@ -142,7 +151,6 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
                             "Không tìm thấy người dùng",
                             "User not found with id: " + userId);
                 });
-
         ShoppingCart shoppingCart = user.getShopping_cart();
         var listOrders = shoppingCart.getListCartItems();
         var response = listOrders.stream().map(
@@ -152,7 +160,8 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
                         cartItem.getTotal_price(),
                         cartItem.getProduct()))
                 .toList();
-
+        // Lưu vào cache
+        redisService.setValue(key, response);
         return response;
     }
 
@@ -160,7 +169,6 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
      * Giảm số lượng sản phẩm trong giỏ hàng
      */
     @Override
-    @CacheEvict(value = "cart", key = "#userId")
     public void reduceItem(long userId, long productId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(
@@ -184,6 +192,8 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
         shoppingCart.setTotal_product(totalAmount(listOrders));
         shoppingCart.setTotal_price(totalPrice(listOrders));
         shoppingCartRepository.save(shoppingCart);
+        // Xóa cache giỏ hàng user này
+        redisService.delete("cart:" + userId);
     }
 
     /**

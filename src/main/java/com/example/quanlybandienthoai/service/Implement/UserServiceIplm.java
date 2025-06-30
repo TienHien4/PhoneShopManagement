@@ -12,12 +12,13 @@ import com.example.quanlybandienthoai.enums.DefinitionCode;
 import com.example.quanlybandienthoai.exception.AppException;
 import com.example.quanlybandienthoai.repository.RoleRepository;
 import com.example.quanlybandienthoai.repository.UserRepository;
+import com.example.quanlybandienthoai.service.RedisService;
 import com.example.quanlybandienthoai.service.UserService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -25,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * @author: Nguyễn Tiến Hiền
@@ -38,6 +40,8 @@ public class UserServiceIplm implements UserService {
         private UserRepository userRepository;
         @Autowired
         private RoleRepository roleRepository;
+        @Autowired
+        private RedisService redisService;
 
         private static final Logger logger = LogManager.getLogger(UserServiceIplm.class);
 
@@ -48,7 +52,6 @@ public class UserServiceIplm implements UserService {
          * @return Thông tin khách hàng sau khi tạo
          */
         @Override
-        @CacheEvict(value = { "user", "userList" }, allEntries = true)
         public UserResponse createCustomer(UserRequest request) {
                 logger.info("Bắt đầu tạo khách hàng với email: {}", request.getEmail());
 
@@ -76,6 +79,10 @@ public class UserServiceIplm implements UserService {
                 userRepository.save(user);
                 logger.info("Tạo khách hàng thành công, ID: {}", user.getUserId());
 
+                // Xóa cache danh sách user và user theo id
+                redisService.delete("userList");
+                redisService.delete("user:" + user.getUserId());
+
                 // Trả về response
                 return new UserResponse(
                                 user.getUserId(),
@@ -92,7 +99,6 @@ public class UserServiceIplm implements UserService {
          * Cập nhật thông tin người dùng theo ID.
          */
         @Override
-        @CacheEvict(value = { "userList", "user" }, allEntries = true)
         public UserResponse updateCustomer(long id, UserUpdateRequest request) {
                 User user = userRepository.findById(id)
                                 .orElseThrow(() -> {
@@ -109,6 +115,10 @@ public class UserServiceIplm implements UserService {
                 userRepository.save(user);
                 logger.info("Sửa khách hàng thành công, ID: {}", user.getUserId());
 
+                // Xóa cache danh sách user và user theo id
+                redisService.delete("userList");
+                redisService.delete("user:" + id);
+
                 return new UserResponse(
                                 user.getUserId(),
                                 user.getUsername(),
@@ -124,9 +134,16 @@ public class UserServiceIplm implements UserService {
          * Lấy thông tin người dùng theo ID (có cache)
          */
         @Override
-        @Cacheable(value = "user", key = "#id")
         public UserResponse getCustomerById(long id) {
                 long start = System.currentTimeMillis();
+                // Kiểm tra cache trước
+                Object cached = redisService.getValue("user:" + id);
+                if (cached != null) {
+                        logger.info("Trả về từ cache Redis");
+                        long end = System.currentTimeMillis();
+                        logger.info("getCustomer DB query time: {} ms", (end - start));
+                        return (UserResponse) cached;
+                }
                 User user = userRepository.findById(id)
                                 .orElseThrow(() -> new AppException(
                                                 DefinitionCode.NOT_FOUND,
@@ -141,6 +158,7 @@ public class UserServiceIplm implements UserService {
                                 user.getAddress(),
                                 user.getRegistrated_date(),
                                 user.getRoles().stream().map(s -> s.getName()).collect(Collectors.toSet()));
+                redisService.setValue("user:" + id, response);
                 long end = System.currentTimeMillis();
                 logger.info("getCustomerById time: {} ms", (end - start));
                 return response;
@@ -150,24 +168,44 @@ public class UserServiceIplm implements UserService {
          * Lấy danh sách tất cả người dùng.
          */
         @Override
-        @Cacheable(value = "userList")
         public List<UserResponse> getCustomers() {
                 long start = System.currentTimeMillis();
+                Object cached = redisService.getValue("userList");
+
+                if (cached != null) {
+                        try {
+                                ObjectMapper mapper = new ObjectMapper();
+                                mapper.registerModule(new JavaTimeModule());
+                                // Chuyển object cache thành List<UserResponse>
+                                List<UserResponse> cachedList = mapper.convertValue(cached, new TypeReference<List<UserResponse>>() {});
+                                logger.info("Trả về từ cache Redis");
+                                long end = System.currentTimeMillis();
+                                logger.info("getCustomers DB query time: {} ms", (end - start));
+                                return cachedList;
+                        } catch (Exception e) {
+                                logger.warn("Lỗi khi chuyển dữ liệu từ cache: {}", e.getMessage());
+                        }
+                }
+                // Nếu không có cache → truy DB
                 List<User> listUsers = userRepository.findAll();
                 List<UserResponse> result = listUsers.stream()
-                                .map(user -> new UserResponse(
-                                                user.getUserId(),
-                                                user.getUsername(),
-                                                user.getEmail(),
-                                                user.getPassword(),
-                                                user.getPhone(),
-                                                user.getAddress(),
-                                                user.getRegistrated_date(),
-                                                user.getRoles().stream().map(s -> s.getName())
-                                                                .collect(Collectors.toSet())))
-                                .toList();
+                        .map(user -> new UserResponse(
+                                user.getUserId(),
+                                user.getUsername(),
+                                user.getEmail(),
+                                user.getPassword(),
+                                user.getPhone(),
+                                user.getAddress(),
+                                user.getRegistrated_date(),
+                                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())))
+                        .toList();
+
+                // Lưu vào cache
+                redisService.setValue("userList", result);
+
                 long end = System.currentTimeMillis();
-                logger.info("getCustomers time: {} ms", (end - start));
+                logger.info("getCustomers DB query time: {} ms", (end - start));
                 return result;
         }
+
 }

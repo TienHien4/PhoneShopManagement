@@ -9,9 +9,11 @@ import com.example.quanlybandienthoai.enums.DefinitionCode;
 import com.example.quanlybandienthoai.exception.AppException;
 import com.example.quanlybandienthoai.repository.*;
 import com.example.quanlybandienthoai.service.OrderService;
+import com.example.quanlybandienthoai.service.RedisService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +46,9 @@ public class OrderServiceIplm implements OrderService {
     @Autowired
     private CartItemRepository cartItemRepository;
 
+    @Autowired
+    private RedisService redisService;
+
     /**
      * Xử lý đặt đơn hàng mới từ người dùng.
      * Kiểm tra hợp lệ người dùng, sản phẩm, tính tổng giá và số lượng,
@@ -54,7 +59,6 @@ public class OrderServiceIplm implements OrderService {
      */
     @Override
     @Transactional
-    @CacheEvict(value = { "orderList" }, allEntries = true)
     public OrderResponse placeOrder(OrderRequest request) {
         // Lấy thông tin người dùng
         User user = userRepository.findById(request.getUserId())
@@ -127,6 +131,8 @@ public class OrderServiceIplm implements OrderService {
             itemResponses.add(itemResponse);
         }
         response.setItems(itemResponses);
+        // Xóa cache danh sách order
+        redisService.delete("orderList");
         return response;
     }
 
@@ -136,17 +142,27 @@ public class OrderServiceIplm implements OrderService {
      * @return Danh sách đơn hàng (OrderResponse)
      */
     @Override
-    @Cacheable(value = "orderList")
     public List<OrderResponse> getAllOrders() {
+        // Kiểm tra cache trước
+        Object cached = redisService.getValue("orderList");
+        if (cached != null) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.registerModule(new JavaTimeModule());
+                List<OrderResponse> cachedList = mapper.convertValue(cached, new TypeReference<List<OrderResponse>>() {});
+                return cachedList;
+            } catch (Exception e) {
+                // log lỗi nếu cần
+            }
+        }
         List<Order> orders = orderRepository.findAll();
-        return orders.stream().map(order -> {
+        List<OrderResponse> result = orders.stream().map(order -> {
             OrderResponse orderResponse = new OrderResponse();
             orderResponse.setOrder_id(order.getOrder_id());
             orderResponse.setUser_id(order.getUser().getUserId());
             orderResponse.setOrder_date(order.getOrder_date());
             orderResponse.setTotal_quantity(order.getTotal_quantity());
             orderResponse.setTotal_price(order.getTotal_price());
-
             List<OrderItemResponse> itemResponses = order.getOrderItems().stream().map(item -> {
                 OrderItemResponse itemResponse = new OrderItemResponse();
                 itemResponse.setProduct_id(item.getProduct().getProduct_id());
@@ -155,10 +171,11 @@ public class OrderServiceIplm implements OrderService {
                 itemResponse.setPrice(item.getPrice());
                 return itemResponse;
             }).toList();
-
             orderResponse.setItems(itemResponses);
             return orderResponse;
         }).toList();
+        redisService.setValue("orderList", result);
+        return result;
     }
 
     /**
@@ -168,7 +185,6 @@ public class OrderServiceIplm implements OrderService {
      * @throws AppException nếu không tìm thấy đơn hàng
      */
     @Override
-    @CacheEvict(value = { "orderList" }, allEntries = true)
     public void deleteOrder(Long orderId) {
         if (!orderRepository.existsById(orderId)) {
             throw new AppException(
@@ -177,5 +193,7 @@ public class OrderServiceIplm implements OrderService {
                     "Order not found");
         }
         orderRepository.deleteById(orderId);
+        // Xóa cache danh sách order
+        redisService.delete("orderList");
     }
 }
