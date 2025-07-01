@@ -120,15 +120,15 @@ public class ShoppingCartServiceIplm implements ShoppingCartService {
 
         ShoppingCart shoppingCart = user.getShopping_cart();
         var listOrders = shoppingCart.getListCartItems();
-        var order = findOrders(listOrders, product);
-        listOrders.remove(order);
-
-        cartItemRepository.delete(order);
-        shoppingCart.setTotal_product(totalAmount(listOrders));
-        shoppingCart.setTotal_price(totalPrice(listOrders));
-        shoppingCartRepository.save(shoppingCart);
-        // Xóa cache giỏ hàng user này
+         var order = findOrders(listOrders, product);
+         listOrders.remove(order);
+         cartItemRepository.delete(order);
+         shoppingCart.setTotal_product(totalAmount(listOrders));
+         shoppingCart.setTotal_price(totalPrice(listOrders));
+         shoppingCartRepository.save(shoppingCart);
+         // Xóa cache giỏ hàng user này
         redisService.delete("cart:" + userId);
+
     }
 
     /**

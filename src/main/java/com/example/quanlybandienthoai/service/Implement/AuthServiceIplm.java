@@ -11,6 +11,7 @@ import com.example.quanlybandienthoai.enums.DefinitionCode;
 import com.example.quanlybandienthoai.exception.AppException;
 import com.example.quanlybandienthoai.repository.InvalidatedTokenRepository;
 import com.example.quanlybandienthoai.service.AuthService;
+import com.example.quanlybandienthoai.service.RedisService;
 import com.nimbusds.jwt.JWTClaimsSet;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -35,6 +36,9 @@ public class AuthServiceIplm implements AuthService {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private RedisService redisService;
+
     public LoginResponse login(LoginRequest request) throws ParseException {
         // Thực hiện xác thực username/password
         Authentication authentication = authenticationManager.authenticate(
@@ -58,10 +62,17 @@ public class AuthServiceIplm implements AuthService {
     @Override
     public void logout(LogoutRequest request) {
         JWTClaimsSet claimsSet = jwtUtil.getClaimsFromToken(request.getToken());
-        InvalidatedToken invalidatedToken = new InvalidatedToken();
-        invalidatedToken.setExpTime(claimsSet.getExpirationTime());
-        invalidatedToken.setUUID(claimsSet.getJWTID());
-        invalidatedTokenRepository.save(invalidatedToken);
+        // Lưu token vào Redis blacklist với TTL bằng thời gian còn lại
+        String jti = claimsSet.getJWTID();
+        long ttlSeconds = (claimsSet.getExpirationTime().getTime() - System.currentTimeMillis()) / 1000;
+        if (ttlSeconds > 0) {
+            String redisKey = "blacklist:" + jti;
+            redisService.setValue(redisKey, "1", ttlSeconds);
+        }
+        // InvalidatedToken invalidatedToken = new InvalidatedToken();
+        // invalidatedToken.setExpTime(claimsSet.getExpirationTime());
+        // invalidatedToken.setUUID(jti);
+        // invalidatedTokenRepository.save(invalidatedToken);
     }
 
     @Override
@@ -84,10 +95,16 @@ public class AuthServiceIplm implements AuthService {
                         "Refresh token is invalid");
             }
             JWTClaimsSet claimsSet = jwtUtil.getClaimsFromToken(request.getToken());
-            InvalidatedToken invalidatedToken = new InvalidatedToken();
-            invalidatedToken.setExpTime(claimsSet.getExpirationTime());
-            invalidatedToken.setUUID(claimsSet.getJWTID());
-            invalidatedTokenRepository.save(invalidatedToken);
+            String jwtId = claimsSet.getJWTID();
+            long ttlSeconds = (claimsSet.getExpirationTime().getTime() - System.currentTimeMillis()) / 1000;
+            if (ttlSeconds > 0) {
+                String redisKey = "blacklist:" + jwtId;
+                redisService.setValue(redisKey, "1", ttlSeconds);
+            }
+//            InvalidatedToken invalidatedToken = new InvalidatedToken();
+//            invalidatedToken.setExpTime(claimsSet.getExpirationTime());
+//            invalidatedToken.setUUID(claimsSet.getJWTID());
+//            invalidatedTokenRepository.save(invalidatedToken);
             // Sinh access token mới
             String newToken = jwtUtil.generateToken(username);
             response.setToken(newToken);

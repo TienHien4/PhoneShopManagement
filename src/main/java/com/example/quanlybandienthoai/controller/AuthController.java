@@ -51,7 +51,7 @@ public class AuthController {
      */
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<UserResponse>> register(@RequestBody @Valid UserRequest request) {
-        var result = userService.createCustomer(request);
+        var result = userService.createUser(request);
         var message = new ApiMessage("Tạo tài khoản thành công", "User registered successfully",
                 DefinitionCode.SUCCESS.getCode());
         return ResponseEntity.ok().body(new ApiResponse<>(message, result));

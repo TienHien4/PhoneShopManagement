@@ -10,6 +10,7 @@ import com.example.quanlybandienthoai.enums.DefinitionCode;
 import com.example.quanlybandienthoai.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -35,7 +36,7 @@ public class UserController {
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllCustomer() {
-        var result = userService.getCustomers();
+        var result = userService.getUsers();
         var message = new ApiMessage(
                 "Lấy danh sách khách hàng thành công",
                 "Get all customers successfully",
@@ -50,7 +51,7 @@ public class UserController {
      */
     @PostMapping("")
     public ResponseEntity<ApiResponse<UserResponse>> register(@RequestBody @Valid UserRequest request) {
-        var result = userService.createCustomer(request);
+        var result = userService.createUser(request);
         var message = new ApiMessage("Tạo tài khoản thành công", "User registered successfully",
                 DefinitionCode.SUCCESS.getCode());
         return ResponseEntity.ok().body(new ApiResponse<>(message, result));
@@ -64,7 +65,7 @@ public class UserController {
      */
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> updateCustomer(@PathVariable int id, @RequestBody @Valid UserUpdateRequest request) {
-        var result = userService.updateCustomer(id, request);
+        var result = userService.updateUser(id, request);
         var message = new ApiMessage(
                 "Sửa thông tin khách hàng thành công",
                 "Customer updated",
@@ -80,10 +81,31 @@ public class UserController {
      */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> findUserById(@PathVariable int id) {
-        var result = userService.getCustomerById(id);
+        var result = userService.getUserById(id);
         var message = new ApiMessage(
                 "Tìm người dùng thành công",
                 "Find user successfully",
+                DefinitionCode.SUCCESS.getCode()
+        );
+        return ResponseEntity.ok().body(new ApiResponse<>(message, result));
+    }
+    @GetMapping("/page")
+    public ResponseEntity<ApiResponse<Page<UserResponse>>> getAllCustomerPagination(
+            @RequestParam int pageNo, @RequestParam(defaultValue = "8") int pageSize) {
+        var result = userService.pagination(pageNo, pageSize);
+        var message = new ApiMessage(
+                "Lấy danh sách khách hàng thành công",
+                "Get all customers successfully",
+                DefinitionCode.SUCCESS.getCode()
+        );
+        return ResponseEntity.ok().body(new ApiResponse<>(message, result));
+    }
+    @GetMapping("/search/{keyword}")
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getCustomerByKeyword(@PathVariable String keyword) {
+        var result = userService.getUserByKeyword(keyword);
+        var message = new ApiMessage(
+                "Lấy danh sách khách theo từ khóa hàng thành công",
+                "Get customers successfully",
                 DefinitionCode.SUCCESS.getCode()
         );
         return ResponseEntity.ok().body(new ApiResponse<>(message, result));

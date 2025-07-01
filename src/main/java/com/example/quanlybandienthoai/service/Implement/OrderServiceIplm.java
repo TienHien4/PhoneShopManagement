@@ -14,6 +14,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -133,6 +136,7 @@ public class OrderServiceIplm implements OrderService {
         response.setItems(itemResponses);
         // Xóa cache danh sách order
         redisService.delete("orderList");
+        redisService.deleteByPattern("orderPage::*");
         return response;
     }
 
@@ -149,7 +153,8 @@ public class OrderServiceIplm implements OrderService {
             try {
                 ObjectMapper mapper = new ObjectMapper();
                 mapper.registerModule(new JavaTimeModule());
-                List<OrderResponse> cachedList = mapper.convertValue(cached, new TypeReference<List<OrderResponse>>() {});
+                List<OrderResponse> cachedList = mapper.convertValue(cached, new TypeReference<List<OrderResponse>>() {
+                });
                 return cachedList;
             } catch (Exception e) {
                 // log lỗi nếu cần
@@ -195,5 +200,86 @@ public class OrderServiceIplm implements OrderService {
         orderRepository.deleteById(orderId);
         // Xóa cache danh sách order
         redisService.delete("orderList");
+        redisService.delete("order:" + orderId);
+        redisService.deleteByPattern("orderPage::*");
+    }
+
+
+
+    @Override
+    public Page<OrderResponse> pagination(int pageNo, int pageSize) {
+        String cacheKey = "orderPage::" + pageNo + "_" + pageSize;
+        Object cached = redisService.getValue(cacheKey);
+        if (cached != null) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.registerModule(new JavaTimeModule());
+                List<OrderResponse> cachedList = mapper.convertValue(cached, new TypeReference<List<OrderResponse>>() {
+                });
+                Pageable pageable = PageRequest.of(pageNo - 1, pageSize);
+                return new org.springframework.data.domain.PageImpl<>(cachedList, pageable, cachedList.size());
+            } catch (Exception e) {
+                // log lỗi nếu cần
+            }
+        }
+        Pageable pageable = PageRequest.of(pageNo - 1, pageSize);
+        var result = orderRepository.findAll(pageable).map(order -> {
+            OrderResponse orderResponse = new OrderResponse();
+            orderResponse.setOrder_id(order.getOrder_id());
+            orderResponse.setUser_id(order.getUser().getUserId());
+            orderResponse.setOrder_date(order.getOrder_date());
+            orderResponse.setTotal_quantity(order.getTotal_quantity());
+            orderResponse.setTotal_price(order.getTotal_price());
+            List<OrderItemResponse> itemResponses = order.getOrderItems().stream().map(item -> {
+                OrderItemResponse itemResponse = new OrderItemResponse();
+                itemResponse.setProduct_id(item.getProduct().getProduct_id());
+                itemResponse.setProduct_name(item.getProduct().getProduct_name());
+                itemResponse.setQuantity(item.getQuantity());
+                itemResponse.setPrice(item.getPrice());
+                return itemResponse;
+            }).toList();
+            orderResponse.setItems(itemResponses);
+            return orderResponse;
+        });
+        redisService.setValue(cacheKey, result.getContent(), 300);
+        return result;
+    }
+
+    @Override
+    public OrderResponse searchOrderById(Long orderId) {
+        String cacheKey = "order:" + orderId;
+        Object cached = redisService.getValue(cacheKey);
+        if (cached != null) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.registerModule(new JavaTimeModule());
+                return mapper.convertValue(cached, OrderResponse.class);
+            } catch (Exception e) {
+                // log lỗi nếu cần
+            }
+        }
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(
+                        DefinitionCode.NOT_FOUND,
+                        "Không tìm thấy đơn hàng",
+                        "Order not found with id: " + orderId));
+        OrderResponse orderResponse = new OrderResponse();
+        orderResponse.setOrder_id(order.getOrder_id());
+        orderResponse.setUser_id(order.getUser().getUserId());
+        orderResponse.setOrder_date(order.getOrder_date());
+        orderResponse.setTotal_quantity(order.getTotal_quantity());
+        orderResponse.setTotal_price(order.getTotal_price());
+        List<OrderItemResponse> itemResponses = order.getOrderItems().stream().map(item -> {
+            OrderItemResponse itemResponse = new OrderItemResponse();
+            itemResponse.setProduct_id(item.getProduct().getProduct_id());
+            itemResponse.setProduct_name(item.getProduct().getProduct_name());
+            itemResponse.setQuantity(item.getQuantity());
+            itemResponse.setPrice(item.getPrice());
+            return itemResponse;
+        }).toList();
+        orderResponse.setItems(itemResponses);
+        // Lưu cache với TTL 5 phút
+        redisService.setValue(cacheKey, orderResponse);
+        return orderResponse;
     }
 }

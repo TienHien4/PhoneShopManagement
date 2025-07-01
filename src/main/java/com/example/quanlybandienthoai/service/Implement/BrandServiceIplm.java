@@ -13,6 +13,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.lang.reflect.Type;
@@ -30,10 +33,8 @@ public class BrandServiceIplm implements BrandService {
 
     @Autowired
     private BrandRepository brandRepository;
-
     @Autowired
     private RedisService redisService;
-
     private static final Logger logger = LogManager.getLogger(BrandServiceIplm.class);
 
     /**
@@ -66,7 +67,8 @@ public class BrandServiceIplm implements BrandService {
 
         // Xóa cache danh sách brand và brand theo id
         redisService.delete("brandList");
-        redisService.delete("brand:" + brand.getBrand_id());
+        redisService.deleteByPattern("brandKeyword:*");
+        redisService.deleteByPattern("brandPage::*");
 
         return new BrandResponse(
                 brand.getBrand_id(),
@@ -152,7 +154,8 @@ public class BrandServiceIplm implements BrandService {
         if (cached != null) {
             try {
                 ObjectMapper mapper = new ObjectMapper();
-                List<BrandResponse> cachedList = mapper.convertValue(cached, new TypeReference<List<BrandResponse>>() {});
+                List<BrandResponse> cachedList = mapper.convertValue(cached, new TypeReference<List<BrandResponse>>() {
+                });
                 logger.info("Trả về danh sách brand từ cache");
                 return cachedList;
             } catch (Exception e) {
@@ -166,11 +169,67 @@ public class BrandServiceIplm implements BrandService {
                     BrandResponse brandResponse = new BrandResponse(
                             brand.getBrand_id(),
                             brand.getBrandName(),
-                            brand.getCountry()
-                    );
-                    return  brandResponse;
+                            brand.getCountry());
+                    return brandResponse;
                 }).collect(Collectors.toList());
         redisService.setValue(cacheKey, result);
+        return result;
+    }
+
+    @Override
+    public List<BrandResponse> getBrandsByBrandName(String keyword) {
+        String cacheKey = "brandKeyword:" + keyword;
+        Object cached = redisService.getValue(cacheKey);
+        if (cached != null) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                List<BrandResponse> cachedList = mapper.convertValue(cached, new TypeReference<List<BrandResponse>>() {
+                });
+                logger.info("Trả về danh sách brand theo keyword từ cache");
+                return cachedList;
+            } catch (Exception e) {
+                logger.warn("Lỗi khi ép kiểu dữ liệu cache brandKeyword: {}", e.getMessage());
+            }
+        }
+        List<Brand> brands = brandRepository.findByByKeyword(keyword);
+        List<BrandResponse> result = brands.stream()
+                .map(brand -> new BrandResponse(
+                        brand.getBrand_id(),
+                        brand.getBrandName(),
+                        brand.getCountry()))
+                .collect(Collectors.toList());
+        // Lưu cache với TTL 5 phút
+        redisService.setValue(cacheKey, result, 300);
+        return result;
+    }
+
+    @Override
+    public Page<BrandResponse> pagination(int pageNo, int pageSize) {
+        String cacheKey = "brandPage::" + pageNo + "_" + pageSize;
+        Object cached = redisService.getValue(cacheKey);
+        if (cached != null) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                List<BrandResponse> cachedList = mapper.convertValue(cached, new TypeReference<List<BrandResponse>>() {
+                });
+                org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest
+                        .of(pageNo - 1, pageSize);
+                return new org.springframework.data.domain.PageImpl<>(cachedList, pageable, cachedList.size());
+            } catch (Exception e) {
+                logger.warn("Lỗi khi ép kiểu dữ liệu cache brandPage: {}", e.getMessage());
+            }
+        }
+        Pageable pageable = PageRequest.of(pageNo - 1,pageSize);
+        Page<BrandResponse> result = brandRepository.findAll(pageable).map(brand -> {
+            BrandResponse brandResponse = new BrandResponse(
+                    brand.getBrand_id(),
+                    brand.getBrandName(),
+                    brand.getCountry()
+            );
+            return brandResponse;
+        });
+
+        redisService.setValue(cacheKey, result.getContent(), 300);
         return result;
     }
 }

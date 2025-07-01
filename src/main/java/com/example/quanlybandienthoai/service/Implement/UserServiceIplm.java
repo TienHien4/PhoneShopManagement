@@ -19,6 +19,10 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -52,7 +56,7 @@ public class UserServiceIplm implements UserService {
          * @return Thông tin khách hàng sau khi tạo
          */
         @Override
-        public UserResponse createCustomer(UserRequest request) {
+        public UserResponse createUser(UserRequest request) {
                 logger.info("Bắt đầu tạo khách hàng với email: {}", request.getEmail());
 
                 // Kiểm tra email đã tồn tại chưa
@@ -81,6 +85,7 @@ public class UserServiceIplm implements UserService {
 
                 // Xóa cache danh sách user và user theo id
                 redisService.delete("userList");
+                redisService.delete("userKeyword");
                 redisService.delete("user:" + user.getUserId());
 
                 // Trả về response
@@ -99,7 +104,7 @@ public class UserServiceIplm implements UserService {
          * Cập nhật thông tin người dùng theo ID.
          */
         @Override
-        public UserResponse updateCustomer(long id, UserUpdateRequest request) {
+        public UserResponse updateUser(long id, UserUpdateRequest request) {
                 User user = userRepository.findById(id)
                                 .orElseThrow(() -> {
                                         logger.warn("Không tìm thấy khách hàng với ID: {}", id);
@@ -117,6 +122,7 @@ public class UserServiceIplm implements UserService {
 
                 // Xóa cache danh sách user và user theo id
                 redisService.delete("userList");
+                redisService.delete("userKeyword");
                 redisService.delete("user:" + id);
 
                 return new UserResponse(
@@ -134,7 +140,7 @@ public class UserServiceIplm implements UserService {
          * Lấy thông tin người dùng theo ID (có cache)
          */
         @Override
-        public UserResponse getCustomerById(long id) {
+        public UserResponse getUserById(long id) {
                 long start = System.currentTimeMillis();
                 // Kiểm tra cache trước
                 Object cached = redisService.getValue("user:" + id);
@@ -168,10 +174,10 @@ public class UserServiceIplm implements UserService {
          * Lấy danh sách tất cả người dùng.
          */
         @Override
-        public List<UserResponse> getCustomers() {
+        public List<UserResponse> getUsers() {
                 long start = System.currentTimeMillis();
                 Object cached = redisService.getValue("userList");
-
+                // Kiểm tra cache để get dữ liệu
                 if (cached != null) {
                         try {
                                 ObjectMapper mapper = new ObjectMapper();
@@ -202,10 +208,79 @@ public class UserServiceIplm implements UserService {
 
                 // Lưu vào cache
                 redisService.setValue("userList", result);
-
                 long end = System.currentTimeMillis();
                 logger.info("getCustomers DB query time: {} ms", (end - start));
                 return result;
         }
+        /**
+         * Lấy danh sách tất cả người dùng theo từ khóa.
+         */
+        @Override
+        public List<UserResponse> getUserByKeyword(String keyword) {
+                String cacheKey = "userKeyword";
+                Object cached = redisService.getValue(cacheKey);
+                // Kiểm tra cache để get dữ liệu
+                if(cached != null){
+                        ObjectMapper mapper = new ObjectMapper();
+                        mapper.registerModule(new JavaTimeModule());
+                        var cachedList = mapper.convertValue(cached, new TypeReference<List<UserResponse>>() {});
+                        logger.info("Get data from redis");
+                        return cachedList;
+                }
+                // Lấy dữ liệu từ db
+                var listUser = userRepository.findUsersByKeyword(keyword);
+                var result = listUser.stream().map(user -> {
+                      UserResponse userResponse = new UserResponse(
+                              user.getUserId(),
+                              user.getUsername(),
+                              user.getEmail(),
+                              user.getPassword(),
+                              user.getPhone(),
+                              user.getAddress(),
+                              user.getRegistrated_date(),
+                              user.getRoles().stream().map(role -> role.getName()).collect(Collectors.toSet())
+                      );
+                      return  userResponse;
+                }).toList();
+                // Lưu vào cache
+                redisService.setValue(cacheKey, result);
+                return result;
+        }
+        /**
+         * Lấy danh sách tất cả người dùng phân trang.
+         */
+        @Override
+        public Page<UserResponse> pagination(int pageNo, int pageSize) {
+                String cacheKey = "userPage::" + pageNo + "-" + pageSize;
+                Object cached = redisService.getValue(cacheKey);
+                // Kiểm tra cache để get dữ liệu
+                if(cached != null){
+                        ObjectMapper mapper = new ObjectMapper();
+                        mapper.registerModule(new JavaTimeModule());
+                        var cachedList = mapper.convertValue(cached, new TypeReference<List<UserResponse>>() {});
+                        Pageable pageable = PageRequest.of(pageNo-1, pageSize);
+                        return new PageImpl<>(cachedList, pageable, cachedList.size());
+                }
+                // Lấy dữ liệu từ db
+                Pageable pageable = PageRequest.of(pageNo-1, pageSize);
+                var pageUser = userRepository.findAll(pageable);
+                var result = pageUser.map(user -> {
+                        UserResponse userResponse = new UserResponse(
+                                user.getUserId(),
+                                user.getUsername(),
+                                user.getEmail(),
+                                user.getPassword(),
+                                user.getPhone(),
+                                user.getAddress(),
+                                user.getRegistrated_date(),
+                                user.getRoles().stream().map(Role::getName).collect(Collectors.toSet())
+                        );
+                        return  userResponse;
+                });
+                // Lưu vào cache
+                redisService.setValue(cacheKey, result.getContent());
+                return result;
+        }
+
 
 }
