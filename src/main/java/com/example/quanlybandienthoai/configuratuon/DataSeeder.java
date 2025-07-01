@@ -19,14 +19,15 @@ public class DataSeeder {
     @Bean
     ApplicationRunner applicationRunner(UserRepository userRepository, RoleRepository roleRepository) {
         return args -> {
-            if(roleRepository.existsByName("ADMIN")){
+            if (roleRepository.existsByName("ADMIN")) {
                 Role role = new Role("ADMIN", "ADMIN");
                 roleRepository.save(role);
             }
-            if(roleRepository.existsByName("USER")){
-                Role  = new Role("USER", "USER");
+            if (roleRepository.existsByName("USER")) {
+                Role = new Role("USER", "USER");
                 roleRepository.save(role);
             }
+
             if (userRepository.findByUsername("admin") == null) {
                 // Tạo và lưu Role
                 var role1 = roleRepository.findByName("ADMIN");
@@ -49,5 +50,3 @@ public class DataSeeder {
         };
     }
 }
-
-
