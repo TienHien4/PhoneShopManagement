@@ -24,7 +24,7 @@ public class DataSeeder {
                 roleRepository.save(role);
             }
             if (roleRepository.existsByName("USER")) {
-                Role = new Role("USER", "USER");
+                Role role = new Role("USER", "USER");
                 roleRepository.save(role);
             }
 
