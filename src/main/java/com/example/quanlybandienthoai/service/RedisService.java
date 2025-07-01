@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class RedisService {
@@ -15,7 +16,7 @@ public class RedisService {
     }
 
     public void setValue(String key, Object value, long ttlSeconds) {
-        redisTemplate.opsForValue().set(key, value, ttlSeconds);
+        redisTemplate.opsForValue().set(key, value, ttlSeconds, TimeUnit.SECONDS);
     }
 
     public Object getValue(String key) {

@@ -33,8 +33,10 @@ public class BrandServiceIplm implements BrandService {
 
     @Autowired
     private BrandRepository brandRepository;
+
     @Autowired
     private RedisService redisService;
+
     private static final Logger logger = LogManager.getLogger(BrandServiceIplm.class);
 
     /**
@@ -67,8 +69,7 @@ public class BrandServiceIplm implements BrandService {
 
         // Xóa cache danh sách brand và brand theo id
         redisService.delete("brandList");
-        redisService.deleteByPattern("brandKeyword:*");
-        redisService.deleteByPattern("brandPage::*");
+        redisService.delete("brand:" + brand.getBrand_id());
 
         return new BrandResponse(
                 brand.getBrand_id(),
@@ -219,13 +220,12 @@ public class BrandServiceIplm implements BrandService {
                 logger.warn("Lỗi khi ép kiểu dữ liệu cache brandPage: {}", e.getMessage());
             }
         }
-        Pageable pageable = PageRequest.of(pageNo - 1,pageSize);
+        Pageable pageable = PageRequest.of(pageNo - 1, pageSize);
         Page<BrandResponse> result = brandRepository.findAll(pageable).map(brand -> {
             BrandResponse brandResponse = new BrandResponse(
                     brand.getBrand_id(),
                     brand.getBrandName(),
-                    brand.getCountry()
-            );
+                    brand.getCountry());
             return brandResponse;
         });
 
