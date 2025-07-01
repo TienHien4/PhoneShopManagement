@@ -19,6 +19,10 @@ public class DataSeeder {
     @Bean
     ApplicationRunner applicationRunner(UserRepository userRepository, RoleRepository roleRepository) {
         return args -> {
+            Role role1 = new Role("ADMIN", "ADMIN");
+            Role role2 = new Role("USER", "USER");
+            roleRepository.save(role1);
+            roleRepository.save(role2);
 
             if (userRepository.findByUsername("admin") == null) {
                 // Tạo và lưu Role
