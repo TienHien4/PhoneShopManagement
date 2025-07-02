@@ -27,6 +27,7 @@ public class DataSeeder {
                 Role role = new Role("USER", "USER");
                 roleRepository.save(role);
             }
+            // a
 
             if (userRepository.findByUsername("admin") == null) {
                 // Tạo và lưu Role
