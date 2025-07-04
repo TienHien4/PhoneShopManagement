@@ -47,6 +47,25 @@ public class DataSeeder {
                 // Lưu User
                 userRepository.save(user);
             }
+            if (userRepository.findByUsername("user") == null) {
+                // Tạo và lưu Role
+                var role1 = roleRepository.findByName("USER");
+                // Tạo danh sách Role
+                Set<Role> roles = new HashSet<>();
+                roles.add(role1);
+
+                // Tạo và lưu User
+                User user = new User();
+                user.setUsername("user");
+                user.setPassword("123456");
+                user.setEmail("user@gmail.com");
+                user.setRoles(roles);
+                // Mã hóa mật khẩu
+                PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+                user.setPassword(passwordEncoder.encode(user.getPassword()));
+                // Lưu User
+                userRepository.save(user);
+            }
         };
     }
 }
